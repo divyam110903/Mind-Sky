@@ -6,6 +6,7 @@ const authRoutes       = require('./routes/auth');
 const aiRoutes         = require('./routes/ai');
 const assessmentRoutes = require('./routes/assessment');
 const dashboardRoutes  = require('./routes/dashboard');
+const journalRoutes    = require('./routes/journal');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 
 const app = express();
@@ -19,6 +20,7 @@ app.use('/api/auth',        authRoutes);
 app.use('/api/ai',          aiRoutes);
 app.use('/api/assessment',  assessmentRoutes);
 app.use('/api/dashboard',   dashboardRoutes);
+app.use('/api/journal',     journalRoutes);
 
 // MongoDB Connection
 const PORT = process.env.PORT || 5001;

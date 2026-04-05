@@ -45,11 +45,20 @@ router.post('/answer', auth, async (req, res) => {
     // Handle COMPLETED phase interception
     if (aiResult.phase === 'COMPLETED') {
         const user = req.user;
-        // Save full object to MongoDB
-        if (!user.assessments) {
-            user.assessments = [];
+        // Generate a unique session ID for this completed chat
+        const chatSessionId = `session_${Date.now()}_${correlationId.slice(0, 8)}`;
+
+        // Save structured assessment entry
+        if (!user.assessments) user.assessments = [];
+        user.assessments.push({
+            chatSessionId,
+            completedAt: new Date(),
+            data: aiResult
+        });
+        // Keep only the 20 most recent assessments in DB
+        if (user.assessments.length > 20) {
+            user.assessments = user.assessments.slice(-20);
         }
-        user.assessments.push(aiResult);
 
         // Map latest insights for dashboard
         if (aiResult.aiServiceResponse) {
@@ -60,12 +69,13 @@ router.post('/answer', auth, async (req, res) => {
         }
         await user.save();
 
-        // Strip payload for frontend
+        // Strip payload for frontend, include the chatSessionId
         return res.json({
             aiServiceResponse: aiResult.aiServiceResponse,
             result: aiResult.result,
             phase: aiResult.phase,
-            sessionId: aiResult.sessionId
+            sessionId: aiResult.sessionId,
+            chatSessionId
         });
     }
 
@@ -87,6 +97,20 @@ router.get('/history', auth, async (req, res) => {
   } catch (err) {
     console.error('[/api/ai/history]', err);
     res.status(500).json({ message: 'Could not load chat history' });
+  }
+});
+
+// ─── GET /api/ai/assessments ────────────────────────────────────────────────
+// Returns the last 5 completed assessments for the Assessments tab
+router.get('/assessments', auth, async (req, res) => {
+  try {
+    const all = req.user.assessments || [];
+    // Return last 5, most recent first
+    const last5 = all.slice(-5).reverse();
+    res.json({ assessments: last5 });
+  } catch (err) {
+    console.error('[/api/ai/assessments]', err);
+    res.status(500).json({ message: 'Could not load assessments' });
   }
 });
 

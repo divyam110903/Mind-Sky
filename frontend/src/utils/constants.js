@@ -61,6 +61,7 @@ export const sidebarItems = [
   { id: 'assessments', label: 'Assessments', icon: 'FiFileText' },
   { id: 'activities', label: 'Activities', icon: 'FiWind' },
   { id: 'journal', label: 'Journal', icon: 'FiBookOpen' },
+  { id: 'games', label: 'Games', icon: 'FiGrid' },
   { id: 'insights', label: 'Insights', icon: 'FiBarChart2' },
   { id: 'profile', label: 'Profile', icon: 'FiUser' },
 ];

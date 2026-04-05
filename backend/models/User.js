@@ -59,15 +59,22 @@ const UserSchema = new mongoose.Schema({
   xp: { type: Number, default: 0 },
   emotionalScore: { type: Number, default: 75 },
   suggestedActivity: { type: String },
-  journal: [{ 
-    text: { type: String, required: true },
-    date: { type: Date, default: Date.now }
+  journal: [{
+    title:     { type: String, default: '' },
+    text:      { type: String, required: true },
+    mood:      { type: String, default: '😊' },
+    date:      { type: Date, default: Date.now },
+    updatedAt: { type: Date },
   }],
 
   // AI Gateway fields
   sessionId: { type: String, default: () => uuidv4() },
   lastAiInsight: { type: mongoose.Schema.Types.Mixed, default: null },
-  assessments: [{ type: mongoose.Schema.Types.Mixed }],
+  assessments: [{
+    chatSessionId: { type: String },
+    completedAt:   { type: Date, default: Date.now },
+    data:          { type: mongoose.Schema.Types.Mixed }
+  }],
   chatHistory: [{
     role:      { type: String, enum: ['user', 'assistant'], required: true },
     content:   { type: String, required: true },

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import Logo from './Logo';
 import ChatBot from './ChatBot';
+import Journal from './Journal';
+import Games from './Games';
 import { guides, sidebarItems } from '../utils/constants';
 import * as FiIcons from 'react-icons/fi';
 
@@ -8,9 +10,9 @@ const Dashboard = ({ onLogout }) => {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedMood, setSelectedMood] = useState(null);
-  const [journalText, setJournalText] = useState('');
-  const [isJournaling, setIsJournaling] = useState(false);
-  const [isJournalModalOpen, setIsJournalModalOpen] = useState(false);
+  const [assessments, setAssessments] = useState([]);
+  const [assessmentsLoading, setAssessmentsLoading] = useState(false);
+  const [expandedAssessment, setExpandedAssessment] = useState(null);
 
   useEffect(() => {
     const rawUser = localStorage.getItem('user');
@@ -24,6 +26,29 @@ const Dashboard = ({ onLogout }) => {
       }
     }
   }, []);
+
+  // Fetch assessments when switching to the assessments tab
+  useEffect(() => {
+    if (activeTab !== 'assessments') return;
+    const fetchAssessments = async () => {
+      setAssessmentsLoading(true);
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/ai/assessments', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAssessments(data.assessments || []);
+        }
+      } catch (err) {
+        console.error('Failed to load assessments:', err);
+      } finally {
+        setAssessmentsLoading(false);
+      }
+    };
+    fetchAssessments();
+  }, [activeTab]);
 
   const updateRemoteProfile = async (updates) => {
     try {
@@ -49,34 +74,6 @@ const Dashboard = ({ onLogout }) => {
   const handleMoodSelect = (emoji) => {
     setSelectedMood(emoji);
     updateRemoteProfile({ mood: emoji });
-  };
-
-  const handleJournalSubmit = async (e) => {
-    e.preventDefault();
-    if (!journalText.trim()) return;
-    setIsJournaling(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('/api/auth/add-journal', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ text: journalText })
-      });
-      const updatedUser = await res.json();
-      if (res.ok) {
-        setUser(updatedUser);
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        setJournalText('');
-        setIsJournalModalOpen(false);
-      }
-    } catch (err) {
-      console.error('Failed to save journal:', err);
-    } finally {
-      setIsJournaling(false);
-    }
   };
 
   if (!user) return null;
@@ -145,42 +142,6 @@ const Dashboard = ({ onLogout }) => {
       </div>
       )}
 
-      {/* Journal Modal */}
-      {isJournalModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[#0D1B2A]/40 backdrop-blur-md" onClick={() => setIsJournalModalOpen(false)}></div>
-          <div className="bg-white w-full max-w-2xl rounded-[48px] shadow-2xl relative z-10 overflow-hidden">
-            <div className="p-8 md:p-12">
-              <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h2 className="text-3xl font-serif font-black mb-1">Today's Journal</h2>
-                  <p className="text-xs font-black uppercase tracking-widest text-[#0D1B2A]/40">How are you truly feeling, {firstName}?</p>
-                </div>
-                <button onClick={() => setIsJournalModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-full transition-colors cursor-pointer">
-                  <FiIcons.FiX size={24} />
-                </button>
-              </div>
-              <form onSubmit={handleJournalSubmit} className="space-y-6">
-                <textarea
-                  autoFocus
-                  value={journalText}
-                  onChange={(e) => setJournalText(e.target.value)}
-                  placeholder="The sky is yours... write freely."
-                  className="w-full h-64 bg-gray-50 rounded-3xl p-6 text-lg font-medium outline-none focus:ring-2 ring-blue-100 transition-all resize-none"
-                />
-                <button
-                  type="submit"
-                  disabled={isJournaling}
-                  className="w-full py-5 bg-[#0D1B2A] text-white rounded-2xl font-black text-sm uppercase tracking-[0.3em] hover:bg-black shadow-xl transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
-                >
-                  {isJournaling ? 'Journaling...' : 'Save and Shine ✨'}
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Sidebar */}
       <aside className="w-64 shrink-0 bg-white/40 backdrop-blur-xl border-r border-white/50 flex flex-col z-30">
         <div className="p-8">
@@ -222,7 +183,174 @@ const Dashboard = ({ onLogout }) => {
           </div>
         )}
 
-        {activeTab !== 'chat' && (
+        {/* ── Journal Tab ── */}
+        {activeTab === 'journal' && (
+          <Journal user={user} />
+        )}
+
+        {/* ── Games Tab ── */}
+        {activeTab === 'games' && (
+          <Games user={user} />
+        )}
+
+        {/* ── Assessments Tab ── */}
+        {activeTab === 'assessments' && (
+          <div className="max-w-3xl mx-auto">
+            <header className="mb-8">
+              <h1 className="text-4xl font-serif font-black tracking-tight mb-1">Assessments</h1>
+              <p className="text-xs font-black uppercase tracking-widest text-[#0D1B2A]/40">Last 5 completed sessions</p>
+            </header>
+
+            {assessmentsLoading && (
+              <div className="flex items-center justify-center py-24 gap-3 text-[#0D1B2A]/40">
+                <FiIcons.FiLoader size={20} className="animate-spin" />
+                <span className="text-sm font-medium">Loading your assessments…</span>
+              </div>
+            )}
+
+            {!assessmentsLoading && assessments.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+                <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center text-blue-300">
+                  <FiIcons.FiFileText size={36} />
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-[#0D1B2A]/70 mb-1">No assessments yet</p>
+                  <p className="text-xs font-medium text-[#0D1B2A]/40">Complete a chat session with your AI guide to see your results here.</p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('chat')}
+                  className="mt-2 px-6 py-3 bg-[#0D1B2A] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-md cursor-pointer"
+                >
+                  Start AI Chat →
+                </button>
+              </div>
+            )}
+
+            {!assessmentsLoading && assessments.length > 0 && (
+              <div className="space-y-4">
+                {assessments.map((a, idx) => {
+                  // Handle both new format { chatSessionId, completedAt, data: aiResult }
+                  // and old flat format where aiServiceResponse is at top level
+                  const ai = a.data?.aiServiceResponse ?? a.aiServiceResponse ?? {};
+                  const sessionId = a.chatSessionId || `session-${idx + 1}`;
+                  const rawDate = a.completedAt || a.data?.completedAt || null;
+                  const date = rawDate ? new Date(rawDate).toLocaleString() : 'Unknown';
+                  const isCrit = ai.severityExplanation?.toLowerCase().includes('severe') ||
+                                 ai.severityExplanation?.toLowerCase().includes('critical');
+                  const isExpanded = expandedAssessment === idx;
+
+                  return (
+                    <div
+                      key={sessionId}
+                      className="bg-white/60 backdrop-blur-xl border border-white rounded-[28px] overflow-hidden shadow-sm hover:shadow-md transition-all"
+                    >
+                      {/* Card header — always visible */}
+                      <button
+                        onClick={() => setExpandedAssessment(isExpanded ? null : idx)}
+                        className="w-full flex items-start gap-4 p-6 text-left cursor-pointer group"
+                      >
+                        {/* Index badge */}
+                        <div className="w-10 h-10 shrink-0 rounded-xl bg-blue-50 flex items-center justify-center text-blue-400 font-black text-sm">
+                          #{assessments.length - idx}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          {/* Summary */}
+                          {ai.summary ? (
+                            <p className="text-sm font-medium text-[#0D1B2A]/80 leading-snug line-clamp-2">{ai.summary}</p>
+                          ) : (
+                            <p className="text-sm font-medium text-[#0D1B2A]/40 italic">No summary available</p>
+                          )}
+
+                          {/* Chips row */}
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            {ai.severityExplanation && (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide ${
+                                isCrit ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'
+                              }`}>
+                                <FiIcons.FiAlertTriangle size={9} />
+                                {ai.severityExplanation}
+                              </span>
+                            )}
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-[9px] font-black uppercase tracking-wide text-[#0D1B2A]/50">
+                              <FiIcons.FiClock size={9} />
+                              {date}
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-[9px] font-black uppercase tracking-wide text-emerald-600">
+                              <FiIcons.FiCheckCircle size={9} />
+                              Completed
+                            </span>
+                          </div>
+                        </div>
+
+                        <FiIcons.FiChevronDown
+                          size={18}
+                          className={`shrink-0 text-[#0D1B2A]/30 transition-transform duration-300 mt-1 ${
+                            isExpanded ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+
+                      {/* Expanded content */}
+                      {isExpanded && (
+                        <div className="px-6 pb-6 space-y-4 border-t border-gray-100/80 pt-4">
+
+                          {ai.insights && (
+                            <div>
+                              <div className="text-[9px] font-black uppercase tracking-widest text-[#0D1B2A]/30 mb-1.5">Insights</div>
+                              <p className="text-sm font-medium text-[#0D1B2A]/70 leading-relaxed">{ai.insights}</p>
+                            </div>
+                          )}
+
+                          {ai.recommendations?.length > 0 && (
+                            <div>
+                              <div className="text-[9px] font-black uppercase tracking-widest text-[#0D1B2A]/30 mb-1.5">Recommendations</div>
+                              <ul className="space-y-1.5">
+                                {ai.recommendations.map((r, i) => (
+                                  <li key={i} className="flex items-start gap-2 text-sm font-medium text-[#0D1B2A]/70">
+                                    <span className="w-5 h-5 shrink-0 rounded-full bg-blue-50 text-blue-400 flex items-center justify-center text-[10px] font-black mt-0.5">{i + 1}</span>
+                                    {r}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {ai.keyFindings?.length > 0 && (
+                            <div>
+                              <div className="text-[9px] font-black uppercase tracking-widest text-[#0D1B2A]/30 mb-1.5">Key Findings</div>
+                              <ul className="space-y-1">
+                                {ai.keyFindings.map((f, i) => (
+                                  <li key={i} className="flex items-start gap-2 text-sm font-medium text-[#0D1B2A]/70">
+                                    <span className="text-indigo-400 mt-1">•</span>{f}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {ai.reassurance && (
+                            <div className="px-4 py-3 bg-emerald-50 border border-emerald-100 rounded-2xl text-sm font-medium text-emerald-700 italic leading-relaxed">
+                              {ai.reassurance}
+                            </div>
+                          )}
+
+                          {ai.disclaimer && (
+                            <div className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-medium text-[#0D1B2A]/40 leading-relaxed">
+                              {ai.disclaimer}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab !== 'chat' && activeTab !== 'assessments' && activeTab !== 'journal' && activeTab !== 'games' && (
           <>
         <div className="absolute top-0 right-0 w-[60%] h-[40%] bg-blue-200/20 blur-[120px] rounded-full -z-10 pointer-events-none"></div>
 
@@ -263,7 +391,7 @@ const Dashboard = ({ onLogout }) => {
               <button
                 onClick={() => setActiveTab('chat')}
                 className="px-8 py-4 bg-white text-[#0D1B2A] rounded-2xl font-black shadow-lg hover:-translate-y-1 transition-all text-sm active:scale-95 cursor-pointer">Start Chat</button>
-              <button className="px-8 py-4 bg-[#D1E5F4]/60 text-[#0D1B2A] rounded-2xl font-black shadow-sm hover:-translate-y-1 transition-all text-sm active:scale-95 cursor-pointer">Take Test</button>
+
             </div>
           </div>
         </section>
@@ -326,7 +454,7 @@ const Dashboard = ({ onLogout }) => {
               </div>
             </div>
             <button
-              onClick={() => setIsJournalModalOpen(true)}
+              onClick={() => setActiveTab('journal')}
               className="w-full bg-white/60 backdrop-blur-xl border border-white p-8 rounded-[32px] shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group flex flex-col items-center text-center cursor-pointer"
             >
               <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center text-amber-500 mb-5 group-hover:scale-110 transition-transform">
