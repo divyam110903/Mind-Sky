@@ -428,7 +428,7 @@ const Step2ChooseGuide = ({ formData, updateForm, onNext, onBack }) => {
 
         {/* Grid Container ALWAYS 3 cols to save vertical space */}
         <div className="grid grid-cols-3 gap-2 sm:gap-3 md:gap-4 lg:gap-6 w-full px-1 animate-fade-in-up animation-delay-300">
-          {guides.map((guide) => (
+          {guides.filter(g => g.id !== 'ai_guide').map((guide) => (
             <GuideCard 
               key={guide.id}
               guide={guide}

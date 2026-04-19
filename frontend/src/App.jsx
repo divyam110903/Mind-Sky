@@ -39,7 +39,7 @@ function App() {
       {/* Content container */}
       <div className="relative z-10 flex flex-col flex-1 h-full max-w-[1600px] mx-auto w-full pt-4 md:pt-6">
         <Navbar onLoginClick={() => setCurrentRoute('login')} onSignUpClick={() => setCurrentRoute('onboarding')} />
-        <Hero />
+        <Hero onGuestLoginSuccess={() => setCurrentRoute('dashboard')} />
       </div>
     </div>
   );

@@ -102,13 +102,14 @@ function SessionResultCard({ aiResponse, chatSessionId, completedAt }) {
   );
 }
 
-export default function ChatBot({ user, onClose }) {
+export default function ChatBot({ user, onClose, onUpdateUser }) {
   const guide     = guides.find((g) => g.id === user?.selectedGuide) || guides[0];
   const firstName = user?.fullName?.split(' ')[0] || 'Friend';
 
   const [messages,        setMessages]        = useState([]);
   const [input,           setInput]           = useState('');
   const [isTyping,        setIsTyping]        = useState(false);
+  const isTypingRef                           = useRef(false);
   const [isLoading,       setIsLoading]       = useState(true);
   const [error,           setError]           = useState(null);
   const [sessionResult,   setSessionResult]   = useState(null); // { aiResponse, chatSessionId, completedAt }
@@ -226,8 +227,9 @@ export default function ChatBot({ user, onClose }) {
 
   // ── Send message ────────────────────────────────────────────────────────────
   const handleSend = async (textOverride = null) => {
+    if (isTypingRef.current) return;
     const text = textOverride !== null ? textOverride : input.trim();
-    if (text === '' || text === null || isTyping) return;
+    if (text === '' || text === null) return;
 
     if (textOverride === null) setInput('');
     setError(null);
@@ -242,6 +244,7 @@ export default function ChatBot({ user, onClose }) {
       setMessages((prev) => [...prev, { role: 'user', content: text.toString() }]);
     }
     
+    isTypingRef.current = true;
     setIsTyping(true);
 
     try {
@@ -296,6 +299,17 @@ export default function ChatBot({ user, onClose }) {
         };
         setSessionResult(result);
 
+        if (onUpdateUser && data.result?.finalScore !== undefined) {
+          const rawUser = localStorage.getItem('user');
+          if (rawUser) {
+            try {
+              const parsedUser = JSON.parse(rawUser);
+              parsedUser.emotionalScore = data.result.finalScore;
+              onUpdateUser(parsedUser);
+            } catch (e) {}
+          }
+        }
+
         // Short confirmation message — result card is shown separately
         setMessages((prev) => [...prev, {
           role: 'assistant',
@@ -316,6 +330,7 @@ export default function ChatBot({ user, onClose }) {
         { role: 'assistant', content: `I'm here, ${firstName}. It seems there was a connection issue — please try again in a moment. 💙` },
       ]);
     } finally {
+      isTypingRef.current = false;
       setIsTyping(false);
     }
   };
@@ -344,7 +359,7 @@ export default function ChatBot({ user, onClose }) {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full bg-[#F0F7FF] relative overflow-hidden">
+    <div className="flex flex-col h-full bg-transparent relative overflow-hidden">
 
       {/* Ambient glow */}
       <div className="absolute top-0 right-0 w-[50%] h-[40%] bg-blue-200/20 blur-[100px] rounded-full -z-10 pointer-events-none" />

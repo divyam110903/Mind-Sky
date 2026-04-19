@@ -59,6 +59,7 @@ const UserSchema = new mongoose.Schema({
   xp: { type: Number, default: 0 },
   emotionalScore: { type: Number, default: 75 },
   hasEmergencyContacts: { type: Boolean, default: false },
+  isGuest: { type: Boolean, default: false },
   suggestedActivity: { type: String },
   moodLogs: [{
     mood: { type: String, required: true },

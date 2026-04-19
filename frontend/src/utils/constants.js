@@ -53,6 +53,15 @@ export const guides = [
     greeting: 'Peace be with you.',
     quote: '"Slow and steady progress is still progress."'
   },
+  {
+    id: 'ai_guide',
+    emoji: '🤖',
+    image: 'https://api.dicebear.com/7.x/bottts/svg?seed=MindSkyAi',
+    name: 'MindSky AI',
+    tag: 'Advanced & objective',
+    greeting: 'Hello, Guest!',
+    quote: '"I am here to help you evaluate your mental wellbeing."'
+  }
 ];
 
 export const sidebarItems = [

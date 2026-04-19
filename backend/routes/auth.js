@@ -22,7 +22,8 @@ const userResponse = (user) => ({
   moodLogs: user.moodLogs || [],
   assessments: user.assessments || [],
   hasEmergencyContacts: user.hasEmergencyContacts,
-  completedActivities: user.completedActivities || []
+  completedActivities: user.completedActivities || [],
+  isGuest: user.isGuest || false
 });
 
 // Register
@@ -73,6 +74,39 @@ router.post('/login', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error during login' });
+  }
+});
+
+// Guest Login
+router.post('/guest-login', async (req, res) => {
+  try {
+    const { v4: uuidv4 } = require('uuid');
+    const guestId = uuidv4();
+    const guestEmail = `guest_${guestId}@mindsky.local`;
+    const randomPassword = guestId;
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(randomPassword, salt);
+
+    const guestUser = new User({
+      email: guestEmail,
+      password: hashedPassword,
+      fullName: 'Guest',
+      isGuest: true,
+      selectedGuide: 'ai_guide',
+      streak: 0,
+      hasEmergencyContacts: true // bypass prompt
+    });
+
+    await guestUser.save();
+
+    const payload = { userId: guestUser._id };
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+
+    res.status(201).json({ token, user: userResponse(guestUser) });
+  } catch (error) {
+    console.error('[Guest Login Error]', error);
+    res.status(500).json({ message: 'Server error during guest login' });
   }
 });
 

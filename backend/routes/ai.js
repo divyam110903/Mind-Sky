@@ -65,31 +65,43 @@ router.post('/answer', auth, async (req, res) => {
     // Handle COMPLETED phase interception
     if (aiResult.phase === 'COMPLETED') {
         const user = req.user;
-        // Generate a unique session ID for this completed chat
         const chatSessionId = `session_${Date.now()}_${correlationId.slice(0, 8)}`;
 
-        // Save structured assessment entry
-        if (!user.assessments) user.assessments = [];
-        user.assessments.push({
+        const newAssessment = {
             chatSessionId,
             completedAt: new Date(),
             data: aiResult
-        });
-        // Keep only the 20 most recent assessments in DB
-        if (user.assessments.length > 20) {
-            user.assessments = user.assessments.slice(-20);
-        }
+        };
 
-        // Map latest insights for dashboard
+        const updateData = {
+            $push: {
+                assessments: {
+                    $each: [newAssessment],
+                    $slice: -20
+                },
+                chatHistory: {
+                    $each: [
+                        { role: 'user', content: answer !== undefined ? String(answer) : message },
+                        { role: 'assistant', content: aiResult.aiServiceResponse?.summary || 'Assessment Complete' }
+                    ],
+                    $slice: -50
+                }
+            }
+        };
+
         if (aiResult.aiServiceResponse) {
-            user.lastAiInsight = aiResult.aiServiceResponse;
+            updateData.$set = {
+                lastAiInsight: aiResult.aiServiceResponse
+            };
+            if (aiResult.result?.finalScore !== undefined) {
+                updateData.$set.emotionalScore = aiResult.result.finalScore;
+            }
             if (aiResult.aiServiceResponse.recommendations?.length > 0) {
-                user.suggestedActivity = aiResult.aiServiceResponse.recommendations[0];
+                updateData.$set.suggestedActivity = aiResult.aiServiceResponse.recommendations[0];
             }
         }
-        await user.save();
+        await User.findByIdAndUpdate(req.user._id, updateData);
 
-        // Strip payload for frontend, include the chatSessionId
         return res.json({
             aiServiceResponse: aiResult.aiServiceResponse,
             result: aiResult.result,
@@ -99,8 +111,34 @@ router.post('/answer', auth, async (req, res) => {
         });
     }
 
-    // Normal progression format
+    // Normal progression format: persist history
+    let aiText = '';
+    if (aiResult.question?.text) aiText = aiResult.question.text;
+    else if (aiResult.nextQuestion?.text) aiText = aiResult.nextQuestion.text;
+    else if (aiResult.message) aiText = aiResult.message;
+
+    if (aiText || answer !== undefined || message) {
+        const historyPush = [];
+        if (answer !== undefined || message) {
+            historyPush.push({ role: 'user', content: answer !== undefined ? String(answer) : message });
+        }
+        if (aiText) {
+            historyPush.push({ role: 'assistant', content: aiText });
+        }
+        if (historyPush.length > 0) {
+            await User.findByIdAndUpdate(req.user._id, {
+                $push: {
+                    chatHistory: {
+                        $each: historyPush,
+                        $slice: -50
+                    }
+                }
+            });
+        }
+    }
+
     res.json(aiResult);
+
 
   } catch (err) {
     console.error('[/api/ai/answer] Base error:', err);

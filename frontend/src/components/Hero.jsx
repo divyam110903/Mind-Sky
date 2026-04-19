@@ -1,7 +1,35 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { FaInstagram, FaFacebookF, FaTwitter, FaEnvelope } from 'react-icons/fa';
 
-const Hero = () => {
+const Hero = ({ onGuestLoginSuccess }) => {
+  const [guestLoading, setGuestLoading] = useState(false);
+
+  const handleGuestLogin = () => {
+    setGuestLoading(true);
+    fetch('/api/auth/guest-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    .then(res => res.json().then(data => ({ status: res.status, body: data })))
+    .then(({ status, body }) => {
+      setGuestLoading(false);
+      if (status === 201) {
+        localStorage.setItem('token', body.token);
+        localStorage.setItem('user', JSON.stringify(body.user));
+        if (onGuestLoginSuccess) {
+          setTimeout(onGuestLoginSuccess, 500);
+        }
+      } else {
+        alert(body.message || 'Guest login failed');
+      }
+    })
+    .catch((err) => {
+      console.error(err);
+      setGuestLoading(false);
+      alert('Network error. Please try again later.');
+    });
+  };
+
   return (
     <main className="flex-1 flex flex-col md:flex-row items-center justify-between px-8 md:px-16 lg:px-24 w-full gap-12 lg:gap-20 pb-12 pt-6 h-full z-10">
       
@@ -48,7 +76,10 @@ const Hero = () => {
         {/* Call to Actions - Glassmorphism Guest Button */}
         <div className="flex flex-col gap-4 w-full md:max-w-md items-center md:items-start mb-[50px] mt-4 animate-fade-in-up animation-delay-600">
           <button 
-            className="w-full sm:w-auto px-10 py-4 rounded-[1.25rem] font-semibold active:scale-95 flex items-center justify-center gap-3 group"
+            type="button"
+            onClick={handleGuestLogin}
+            disabled={guestLoading}
+            className="w-full sm:w-auto px-10 py-4 rounded-[1.25rem] font-semibold active:scale-95 flex items-center justify-center gap-3 group disabled:opacity-50 cursor-pointer"
             style={{
               background: 'rgba(255,255,255,0.55)',
               backdropFilter: 'blur(12px)',
@@ -56,7 +87,7 @@ const Hero = () => {
               border: '1px solid rgba(0,0,0,0.07)'
             }}
           >
-            <span className="text-[#0D3D56] text-lg">Continue as Guest</span>
+            <span className="text-[#0D3D56] text-lg">{guestLoading ? 'Starting...' : 'Continue as Guest'}</span>
             <svg 
               xmlns="http://www.w3.org/2000/svg" 
               className="h-6 w-6 text-[#0D3D56] opacity-80 transition-transform duration-200 ease-out group-hover:translate-x-1" 
