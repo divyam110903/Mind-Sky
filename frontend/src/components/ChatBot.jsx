@@ -103,25 +103,26 @@ function SessionResultCard({ aiResponse, chatSessionId, completedAt }) {
 }
 
 export default function ChatBot({ user, onClose, onUpdateUser }) {
-  const guide     = guides.find((g) => g.id === user?.selectedGuide) || guides[0];
+  const guide = guides.find((g) => g.id === user?.selectedGuide) || guides[0];
   const firstName = user?.fullName?.split(' ')[0] || 'Friend';
 
-  const [messages,        setMessages]        = useState([]);
-  const [input,           setInput]           = useState('');
-  const [isTyping,        setIsTyping]        = useState(false);
-  const isTypingRef                           = useRef(false);
-  const [isLoading,       setIsLoading]       = useState(true);
-  const [error,           setError]           = useState(null);
-  const [sessionResult,   setSessionResult]   = useState(null); // { aiResponse, chatSessionId, completedAt }
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const isTypingRef = useRef(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [sessionResult, setSessionResult] = useState(null); // { aiResponse, chatSessionId, completedAt }
   const [currentQuestion, setCurrentQuestion] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Docker Gateway integration states
-  const [correlationId,   setCorrelationId]   = useState('');
-  const [sessionId,       setSessionId]       = useState('');
-  const [phase,           setPhase]           = useState('');
-  const [questionId,      setQuestionId]      = useState('');
+  const [correlationId, setCorrelationId] = useState('');
+  const [sessionId, setSessionId] = useState('');
+  const [phase, setPhase] = useState('');
+  const [questionId, setQuestionId] = useState('');
   const [questionnaireId, setQuestionnaireId] = useState('');
-  const [dualSelections,  setDualSelections]  = useState({});
+  const [dualSelections, setDualSelections] = useState({});
 
   const bottomRef = useRef(null);
 
@@ -235,24 +236,31 @@ export default function ChatBot({ user, onClose, onUpdateUser }) {
 
     if (textOverride === null) setInput('');
     setError(null);
-    
+
     let displayAnswer = text;
     if (typeof text === 'object' && text !== null) {
       displayAnswer = Object.entries(text).map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1)}: ${v}`).join(' | ');
     }
-    
+
     if (phase === 'QUESTIONNAIRE' && currentQuestion) {
       setMessages((prev) => [
-        ...prev, 
+        ...prev,
         { role: 'assistant', content: currentQuestion.text },
         { role: 'user', content: displayAnswer.toString() }
       ]);
     } else {
       setMessages((prev) => [...prev, { role: 'user', content: displayAnswer.toString() }]);
     }
-    
+
     isTypingRef.current = true;
     setIsTyping(true);
+
+    let analyzingTimer = null;
+    if (phase === 'QUESTIONNAIRE') {
+      analyzingTimer = setTimeout(() => {
+        setIsAnalyzing(true);
+      }, 1500);
+    }
 
     try {
       const token = localStorage.getItem('token');
@@ -260,8 +268,8 @@ export default function ChatBot({ user, onClose, onUpdateUser }) {
       let reqBody = { sessionId };
       if (phase === 'QUESTIONNAIRE') {
         reqBody.questionnaireId = questionnaireId;
-        reqBody.questionId      = questionId;
-        
+        reqBody.questionId = questionId;
+
         const answerTests = ['asrs', 'gad7', 'pcl5', 'phq9', 'pss10'];
         if (answerTests.includes(questionnaireId)) {
           reqBody.answer = text;
@@ -278,7 +286,7 @@ export default function ChatBot({ user, onClose, onUpdateUser }) {
       }
 
       const res = await fetch(API('/ai/answer'), {
-        method:  'POST',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
@@ -312,9 +320,9 @@ export default function ChatBot({ user, onClose, onUpdateUser }) {
         setCurrentQuestion(null);
         // Save result for in-chat card + for assessments tab
         const result = {
-          aiResponse:     data.aiServiceResponse,
-          chatSessionId:  data.chatSessionId,
-          completedAt:    new Date().toISOString()
+          aiResponse: data.aiServiceResponse,
+          chatSessionId: data.chatSessionId,
+          completedAt: new Date().toISOString()
         };
         setSessionResult(result);
 
@@ -325,7 +333,7 @@ export default function ChatBot({ user, onClose, onUpdateUser }) {
               const parsedUser = JSON.parse(rawUser);
               parsedUser.emotionalScore = data.result.finalScore;
               onUpdateUser(parsedUser);
-            } catch (e) {}
+            } catch (e) { }
           }
         }
 
@@ -349,6 +357,8 @@ export default function ChatBot({ user, onClose, onUpdateUser }) {
         { role: 'assistant', content: `I'm here, ${firstName}. It seems there was a connection issue — please try again in a moment. 💙` },
       ]);
     } finally {
+      if (typeof analyzingTimer !== 'undefined' && analyzingTimer) clearTimeout(analyzingTimer);
+      setIsAnalyzing(false);
       isTypingRef.current = false;
       setIsTyping(false);
     }
@@ -370,7 +380,7 @@ export default function ChatBot({ user, onClose, onUpdateUser }) {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
       });
       startSession();
-    } catch(err) {
+    } catch (err) {
       console.error(err);
       setIsLoading(false);
     }
@@ -452,49 +462,50 @@ export default function ChatBot({ user, onClose, onUpdateUser }) {
             );
           }
           return (
-          <div
-            key={i}
-            className={`flex items-end gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
-          >
-            {/* Avatar */}
-            {msg.role === 'assistant' && (
-              <img
-                src={guide.image}
-                alt={guide.name}
-                className="w-9 h-9 object-contain shrink-0"
-                style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.1))' }}
-              />
-            )}
-            {msg.role === 'user' && (
-              <div className="w-9 h-9 rounded-full bg-[#0D1B2A] flex items-center justify-center text-white text-sm font-black shrink-0">
-                {firstName[0]}
-              </div>
-            )}
-
-            {/* Bubble + optional result card */}
-            <div className={`max-w-[72%] flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-              <div
-                className={`rounded-3xl px-5 py-4 text-sm leading-relaxed font-medium transition-all
-                  ${msg.role === 'user'
-                    ? 'bg-[#0D1B2A] text-white rounded-br-md shadow-lg'
-                    : 'bg-white/80 backdrop-blur-md border border-white text-[#0D1B2A] rounded-bl-md shadow-sm'
-                  }`}
-                style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}
-              >
-                {msg.content}
-              </div>
-
-              {/* Inline session result card on the COMPLETED message */}
-              {msg.sessionResult && (
-                <SessionResultCard
-                  aiResponse={msg.sessionResult.aiResponse}
-                  chatSessionId={msg.sessionResult.chatSessionId}
-                  completedAt={msg.sessionResult.completedAt}
+            <div
+              key={i}
+              className={`flex items-end gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+            >
+              {/* Avatar */}
+              {msg.role === 'assistant' && (
+                <img
+                  src={guide.image}
+                  alt={guide.name}
+                  className="w-9 h-9 object-contain shrink-0"
+                  style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.1))' }}
                 />
               )}
+              {msg.role === 'user' && (
+                <div className="w-9 h-9 rounded-full bg-[#0D1B2A] flex items-center justify-center text-white text-sm font-black shrink-0">
+                  {firstName[0]}
+                </div>
+              )}
+
+              {/* Bubble + optional result card */}
+              <div className={`max-w-[72%] flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                <div
+                  className={`rounded-3xl px-5 py-4 text-sm leading-relaxed font-medium transition-all
+                  ${msg.role === 'user'
+                      ? 'bg-[#0D1B2A] text-white rounded-br-md shadow-lg'
+                      : 'bg-white/80 backdrop-blur-md border border-white text-[#0D1B2A] rounded-bl-md shadow-sm'
+                    }`}
+                  style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}
+                >
+                  {msg.content}
+                </div>
+
+                {/* Inline session result card on the COMPLETED message */}
+                {msg.sessionResult && (
+                  <SessionResultCard
+                    aiResponse={msg.sessionResult.aiResponse}
+                    chatSessionId={msg.sessionResult.chatSessionId}
+                    completedAt={msg.sessionResult.completedAt}
+                  />
+                )}
+              </div>
             </div>
-          </div>
-        )})}
+          )
+        })}
 
         {/* Typing indicator */}
         {isTyping && (
@@ -522,7 +533,21 @@ export default function ChatBot({ user, onClose, onUpdateUser }) {
         <div ref={bottomRef} />
 
         {/* POP-UP OVERLAY FOR QUESTIONNAIRE */}
-        {phase === 'QUESTIONNAIRE' && currentQuestion && (
+        {phase === 'QUESTIONNAIRE' && (isAnalyzing ? (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 md:p-12 bg-white/40 backdrop-blur-md">
+            <div className="w-full max-w-lg bg-white rounded-[32px] border border-blue-100 shadow-[0_20px_60px_rgba(0,0,0,0.08)] p-12 text-center flex flex-col items-center justify-center">
+              <div className="w-20 h-20 mb-8 relative flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-4 border-blue-100"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+                <FiIcons.FiActivity size={32} className="text-blue-500 animate-pulse" />
+              </div>
+              <h3 className="text-sm font-black uppercase tracking-widest text-blue-400 mb-4">Generating Report</h3>
+              <p className="text-xl md:text-2xl font-serif font-bold text-[#0D1B2A] leading-relaxed">
+                Hang on, we are analyzing your responses and generating a comprehensive report...
+              </p>
+            </div>
+          </div>
+        ) : currentQuestion ? (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 md:p-12 bg-white/40 backdrop-blur-md">
             <div className="w-full max-w-lg bg-white rounded-[32px] border border-blue-100 shadow-[0_20px_60px_rgba(0,0,0,0.08)] p-8 text-center flex flex-col">
               <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 mx-auto mb-6 shrink-0 shadow-inner">
@@ -530,20 +555,20 @@ export default function ChatBot({ user, onClose, onUpdateUser }) {
               </div>
               <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-3">Assessment Question</h3>
               <p className="text-xl md:text-2xl font-serif font-black text-[#0D1B2A] leading-relaxed mb-10">{currentQuestion.text}</p>
-              
+
               {(() => {
                 const format = currentQuestion.response_format || { type: 'scale', scale: 'likert_0_3' };
-                
+
                 if (format.type === 'scale') {
                   const parts = format.scale ? format.scale.split('_') : [];
                   let max = parseInt(parts[parts.length - 1]);
                   let min = parseInt(parts[parts.length - 2]);
-                  
+
                   if (isNaN(max)) max = 3;
                   if (isNaN(min)) min = 0;
-                  
-                  const options = Array.from({length: (max - min) + 1}, (_, i) => i + min);
-                  
+
+                  const options = Array.from({ length: (max - min) + 1 }, (_, i) => i + min);
+
                   return (
                     <>
                       <div className="flex flex-wrap justify-center gap-2">
@@ -566,112 +591,112 @@ export default function ChatBot({ user, onClose, onUpdateUser }) {
                 }
 
                 if (format.type === 'number') {
-                    return (
-                        <div className="w-full flex flex-col items-center gap-4">
-                          <div className="flex items-center gap-2">
-                            <input 
-                              type="number" 
-                              id="number-input"
-                              min={format.min ?? 0}
-                              max={format.max ?? 100}
-                              step={format.step ?? 1}
-                              className="w-32 h-16 text-center text-2xl font-black text-[#0D1B2A] bg-white border-2 border-blue-100 rounded-2xl focus:border-blue-400 focus:outline-none"
-                            />
-                            {format.unit && <span className="text-sm font-bold text-[#0D1B2A]/50 uppercase">{format.unit}</span>}
-                          </div>
-                          <button
-                            onClick={() => {
-                                const val = document.getElementById('number-input').value;
-                                if(val !== '') handleSend(format.allow_decimal ? parseFloat(val) : parseInt(val));
-                            }}
-                            disabled={isTyping || isLoading}
-                            className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-sm uppercase tracking-widest rounded-2xl transition-all cursor-pointer"
-                          >
-                            Submit
-                          </button>
-                        </div>
-                    );
+                  return (
+                    <div className="w-full flex flex-col items-center gap-4 mt-2">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="number"
+                          id="number-input"
+                          min={format.min ?? 0}
+                          max={format.max ?? 100}
+                          step={format.step ?? 1}
+                          className="w-32 h-14 px-4 text-center text-xl font-bold text-[#0D1B2A] bg-white/80 border-2 border-transparent hover:border-blue-200 focus:border-blue-500 focus:bg-white rounded-2xl shadow-sm outline-none transition-all"
+                        />
+                        {format.unit && <span className="text-sm font-semibold text-[#0D1B2A]/60">{format.unit}</span>}
+                      </div>
+                      <button
+                        onClick={() => {
+                          const val = document.getElementById('number-input').value;
+                          if (val !== '') handleSend(format.allow_decimal ? parseFloat(val) : parseInt(val));
+                        }}
+                        disabled={isTyping || isLoading}
+                        className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm tracking-wide rounded-2xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        Send
+                      </button>
+                    </div>
+                  );
                 }
 
                 if (format.type === 'time') {
-                    return (
-                        <div className="w-full flex flex-col items-center gap-4">
-                          <input 
-                            type="time" 
-                            id="time-input"
-                            className="w-48 h-16 text-center text-xl font-black text-[#0D1B2A] bg-white border-2 border-blue-100 rounded-2xl focus:border-blue-400 focus:outline-none"
-                          />
-                          <button
-                            onClick={() => {
-                                const val = document.getElementById('time-input').value;
-                                if(val) handleSend(val);
-                            }}
-                            disabled={isTyping || isLoading}
-                            className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-sm uppercase tracking-widest rounded-2xl transition-all cursor-pointer"
-                          >
-                            Submit
-                          </button>
-                        </div>
-                    );
+                  return (
+                    <div className="w-full flex flex-col items-center gap-4 mt-2">
+                      <input
+                        type="time"
+                        id="time-input"
+                        className="w-40 h-14 px-4 text-center text-lg font-bold text-[#0D1B2A] bg-white/80 border-2 border-transparent hover:border-blue-200 focus:border-blue-500 focus:bg-white rounded-2xl shadow-sm outline-none transition-all"
+                      />
+                      <button
+                        onClick={() => {
+                          const val = document.getElementById('time-input').value;
+                          if (val) handleSend(val);
+                        }}
+                        disabled={isTyping || isLoading}
+                        className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm tracking-wide rounded-2xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        Send
+                      </button>
+                    </div>
+                  );
                 }
 
                 if (format.type === 'dual_scale') {
-                     const scale1 = Object.keys(format.response_keys)[0];
-                     const scale2 = Object.keys(format.response_keys)[1];
-                     
-                     const max1 = parseInt(format.response_keys[scale1].split('_').pop()) || 3;
-                     const max2 = parseInt(format.response_keys[scale2].split('_').pop()) || 3;
+                  const scale1 = Object.keys(format.response_keys)[0];
+                  const scale2 = Object.keys(format.response_keys)[1];
 
-                     return (
-                        <div className="w-full flex flex-col gap-6">
-                           <div>
-                               <div className="text-[10px] font-black uppercase tracking-widest text-[#0D1B2A]/50 mb-2">{scale1}</div>
-                               <div className="flex justify-center gap-2">
-                                   {Array.from({length: max1 + 1}, (_, i) => i).map((val) => (
-                                       <button
-                                           key={`s1-${val}`}
-                                           onClick={() => setDualSelections(prev => ({ ...prev, [scale1]: val }))}
-                                           className={`w-12 h-12 bg-white border-2 text-blue-600 font-black text-lg rounded-xl transition-all cursor-pointer ${dualSelections[scale1] === val ? 'ring-4 ring-blue-400 bg-blue-50 border-blue-100' : 'border-blue-100 hover:bg-blue-50'}`}
-                                       >
-                                           {val}
-                                       </button>
-                                   ))}
-                               </div>
-                           </div>
-                           <div>
-                               <div className="text-[10px] font-black uppercase tracking-widest text-[#0D1B2A]/50 mb-2">{scale2}</div>
-                               <div className="flex justify-center gap-2">
-                                   {Array.from({length: max2 + 1}, (_, i) => i).map((val) => (
-                                       <button
-                                           key={`s2-${val}`}
-                                           onClick={() => setDualSelections(prev => ({ ...prev, [scale2]: val }))}
-                                           className={`w-12 h-12 bg-white border-2 text-blue-600 font-black text-lg rounded-xl transition-all cursor-pointer ${dualSelections[scale2] === val ? 'ring-4 ring-blue-400 bg-blue-50 border-blue-100' : 'border-blue-100 hover:bg-blue-50'}`}
-                                       >
-                                           {val}
-                                       </button>
-                                   ))}
-                               </div>
-                           </div>
-                           
-                           <button
-                            disabled={dualSelections[scale1] === undefined || dualSelections[scale2] === undefined || isTyping || isLoading}
-                            onClick={() => {
-                                handleSend({ [scale1]: dualSelections[scale1], [scale2]: dualSelections[scale2] });
-                            }}
-                            className="mt-2 text-center py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-sm uppercase tracking-widest rounded-2xl transition-all w-full max-w-[200px] mx-auto disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                          >
-                            Submit
-                          </button>
+                  const max1 = parseInt(format.response_keys[scale1].split('_').pop()) || 3;
+                  const max2 = parseInt(format.response_keys[scale2].split('_').pop()) || 3;
+
+                  return (
+                    <div className="w-full flex flex-col gap-6">
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-widest text-[#0D1B2A]/50 mb-2">{scale1}</div>
+                        <div className="flex justify-center gap-2">
+                          {Array.from({ length: max1 + 1 }, (_, i) => i).map((val) => (
+                            <button
+                              key={`s1-${val}`}
+                              onClick={() => setDualSelections(prev => ({ ...prev, [scale1]: val }))}
+                              className={`w-12 h-12 bg-white border-2 text-blue-600 font-black text-lg rounded-xl transition-all cursor-pointer ${dualSelections[scale1] === val ? 'ring-4 ring-blue-400 bg-blue-50 border-blue-100' : 'border-blue-100 hover:bg-blue-50'}`}
+                            >
+                              {val}
+                            </button>
+                          ))}
                         </div>
-                     );
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-widest text-[#0D1B2A]/50 mb-2">{scale2}</div>
+                        <div className="flex justify-center gap-2">
+                          {Array.from({ length: max2 + 1 }, (_, i) => i).map((val) => (
+                            <button
+                              key={`s2-${val}`}
+                              onClick={() => setDualSelections(prev => ({ ...prev, [scale2]: val }))}
+                              className={`w-12 h-12 bg-white border-2 text-blue-600 font-black text-lg rounded-xl transition-all cursor-pointer ${dualSelections[scale2] === val ? 'ring-4 ring-blue-400 bg-blue-50 border-blue-100' : 'border-blue-100 hover:bg-blue-50'}`}
+                            >
+                              {val}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <button
+                        disabled={dualSelections[scale1] === undefined || dualSelections[scale2] === undefined || isTyping || isLoading}
+                        onClick={() => {
+                          handleSend({ [scale1]: dualSelections[scale1], [scale2]: dualSelections[scale2] });
+                        }}
+                        className="mt-2 text-center py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-sm uppercase tracking-widest rounded-2xl transition-all w-full max-w-[200px] mx-auto disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        Submit
+                      </button>
+                    </div>
+                  );
                 }
-                
+
                 return null;
               })()}
 
             </div>
           </div>
-        )}
+        ) : null)}
       </div>
 
       {/* ── Input / Action bar ── */}
@@ -693,13 +718,13 @@ export default function ChatBot({ user, onClose, onUpdateUser }) {
               </div>
             </div>
             <button
-               onClick={confirmSafe}
-               disabled={isLoading}
-               className="mt-2 flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-[0_5px_15px_rgba(16,185,129,0.4)] hover:bg-emerald-600 hover:-translate-y-0.5 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
-             >
-               <FiIcons.FiShield size={16} />
-               {isLoading ? 'Updating...' : "I'M SAFE NOW"}
-             </button>
+              onClick={confirmSafe}
+              disabled={isLoading}
+              className="mt-2 flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-[0_5px_15px_rgba(16,185,129,0.4)] hover:bg-emerald-600 hover:-translate-y-0.5 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <FiIcons.FiShield size={16} />
+              {isLoading ? 'Updating...' : "I'M SAFE NOW"}
+            </button>
           </div>
 
         ) : phase === 'COMPLETED' ? (
