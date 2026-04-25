@@ -6,10 +6,18 @@ import OnboardingFlow from './components/OnboardingFlow';
 import Dashboard from './components/Dashboard';
 
 function App() {
-  const [currentRoute, setCurrentRoute] = useState('home');
+  const [currentRoute, setCurrentRoute] = useState(() => {
+    return localStorage.getItem('token') ? 'dashboard' : 'home';
+  });
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setCurrentRoute('home');
+  };
 
   if (currentRoute === 'dashboard') {
-    return <Dashboard onLogout={() => setCurrentRoute('home')} />;
+    return <Dashboard onLogout={handleLogout} />;
   }
 
   if (currentRoute === 'login') {
