@@ -233,10 +233,10 @@ export default function ChatBot({ user, onClose, onUpdateUser }) {
     const text = textOverride !== null ? textOverride : input.trim();
     if (text === '' || text === null) return;
 
-    // Validation: Require at least 3 words for free-text responses
+    // Validation: Require at least 5 words for free-text responses
     if (typeof text === 'string' && phase !== 'QUESTIONNAIRE') {
       const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
-      if (wordCount < 3) {
+      if (wordCount <= 4) {
         setMessages((prev) => [
           ...prev, 
           { role: 'user', content: text },
