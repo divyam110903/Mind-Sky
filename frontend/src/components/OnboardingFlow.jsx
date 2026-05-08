@@ -62,11 +62,43 @@ const Step1Credentials = ({ formData, updateForm, onNext, onBack }) => {
     let newErrors = {};
 
     if (!formData.fullName) { newErrors.fullName = 'Required'; valid = false; }
-    if (!formData.email) { newErrors.email = 'Required'; valid = false; }
-    if (!formData.password) { newErrors.password = 'Required'; valid = false; }
+    
+    if (!formData.email) { 
+      newErrors.email = 'Required'; valid = false; 
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Invalid email format'; valid = false;
+    }
+    
+    if (!formData.password) { 
+      newErrors.password = 'Required'; valid = false; 
+    } else if (formData.password.length < 8) {
+      newErrors.password = 'Must be at least 8 characters'; valid = false;
+    }
+    
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
       valid = false;
+    }
+
+    if (!formData.phone) {
+      newErrors.phone = 'Required'; valid = false;
+    } else if (!/^\d{10}$/.test(formData.phone)) {
+      newErrors.phone = 'Must be a 10-digit number'; valid = false;
+    }
+
+    if (!formData.dob) {
+      newErrors.dob = 'Required'; valid = false;
+    } else {
+      const today = new Date();
+      const birthDate = new Date(formData.dob);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      if (age < 18) {
+        newErrors.dob = 'Must be at least 18 years old'; valid = false;
+      }
     }
 
     setErrors(newErrors);
@@ -181,10 +213,11 @@ const Step1Credentials = ({ formData, updateForm, onNext, onBack }) => {
                 type="tel"
                 placeholder="Mobile Number"
                 value={formData.phone}
-                onChange={(e) => updateForm('phone', e.target.value)}
-                className="w-full pl-11 pr-4 py-3.5 rounded-full outline-none transition-shadow placeholder:text-[#0D1B2A] placeholder:opacity-70 focus:ring-2 focus:ring-[#0D1B2A] border border-transparent h-[50px] shadow-sm"
+                onChange={(e) => { updateForm('phone', e.target.value); if (errors.phone) setErrors({ ...errors, phone: null }) }}
+                className={`w-full pl-11 pr-4 py-3.5 rounded-full outline-none transition-shadow placeholder:text-[#0D1B2A] placeholder:opacity-70 h-[50px] shadow-sm ${errors.phone ? 'border-2 border-red-600' : 'border border-transparent focus:ring-2 focus:ring-[#0D1B2A]'}`}
                 style={{ backgroundColor: '#ffffff', color: '#0D1B2A' }}
               />
+              {errors.phone && <p className="text-red-700 text-[13px] mt-1 ml-4 font-bold">{errors.phone}</p>}
             </div>
 
             {/* Password */}
@@ -235,10 +268,11 @@ const Step1Credentials = ({ formData, updateForm, onNext, onBack }) => {
                 <input
                   type="date"
                   value={formData.dob}
-                  onChange={(e) => updateForm('dob', e.target.value)}
-                  className="w-full pl-11 pr-4 py-3.5 rounded-full outline-none transition-shadow focus:ring-2 focus:ring-[#0D1B2A] border border-transparent h-[50px] shadow-sm"
+                  onChange={(e) => { updateForm('dob', e.target.value); if (errors.dob) setErrors({ ...errors, dob: null }) }}
+                  className={`w-full pl-11 pr-4 py-3.5 rounded-full outline-none transition-shadow h-[50px] shadow-sm ${errors.dob ? 'border-2 border-red-600' : 'border border-transparent focus:ring-2 focus:ring-[#0D1B2A]'}`}
                   style={{ backgroundColor: '#ffffff', color: '#0D1B2A' }}
                 />
+                {errors.dob && <p className="text-red-700 text-[13px] mt-1 ml-4 font-bold">{errors.dob}</p>}
               </div>
 
               <div className="relative text-[#0D1B2A]">
@@ -495,6 +529,22 @@ const SharedOnboardingLayout = ({ step, formData, onNext, onBack, updateForm }) 
 
   // Determine if next is allowed based on consent primarily, or basic validation
   const canProceed = () => {
+    if (step === 3) {
+      return !!(formData.institution && formData.course);
+    }
+    if (step === 4) {
+      return !!(formData.activity && formData.social);
+    }
+    if (step === 6) {
+      return formData.screening?.s1 !== undefined && 
+             formData.screening?.s2 !== undefined && 
+             formData.screening?.s3 !== undefined && 
+             formData.screening?.s4 !== undefined && 
+             formData.screening?.s5 !== undefined;
+    }
+    if (step === 7) {
+      return formData.goals && formData.goals.length > 0;
+    }
     if (step === 8) {
       return formData.consent1 && formData.consent2 && formData.consent3 && formData.consent4;
     }
@@ -605,7 +655,7 @@ const SharedOnboardingLayout = ({ step, formData, onNext, onBack, updateForm }) 
 // ==========================================
 // PREMIUM INPUT COMPONENTS
 // ==========================================
-const PremiumFloatingInput = ({ label, value, onChange, placeholder, type = "text" }) => {
+const PremiumFloatingInput = ({ label, value, onChange, placeholder, type = "text", maxLength }) => {
   const [isFocused, setIsFocused] = useState(false);
   const isActive = isFocused || (value && value.toString().length > 0);
 
@@ -626,6 +676,7 @@ const PremiumFloatingInput = ({ label, value, onChange, placeholder, type = "tex
           type={type}
           value={value || ''}
           onChange={onChange}
+          maxLength={maxLength}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           className={`w-full bg-transparent outline-none px-5 pb-2.5 pt-6 text-[#0D1B2A] font-bold transition-opacity duration-300 ${isActive || isFocused ? 'opacity-100' : 'opacity-0'}`}
@@ -725,13 +776,15 @@ const Step3Academic = ({ formData, updateForm }) => (
         label="Institution"
         value={formData.institution}
         onChange={(e) => updateForm('institution', e.target.value)}
-        placeholder="e.g. Stanford University"
+        placeholder="e.g. LPU"
+        maxLength={100}
       />
       <PremiumFloatingInput 
         label="Course / Major"
         value={formData.course}
         onChange={(e) => updateForm('course', e.target.value)}
         placeholder="e.g. Computer Science"
+        maxLength={100}
       />
     </div>
     
@@ -750,6 +803,7 @@ const Step3Academic = ({ formData, updateForm }) => (
         value={formData.studentId}
         onChange={(e) => updateForm('studentId', e.target.value)}
         placeholder="e.g. 190422X"
+        maxLength={50}
       />
     </div>
   </div>
